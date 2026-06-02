@@ -1,0 +1,25 @@
+# Core LangChain packages
+langchain
+langchain-core
+langchain-mistralai
+langchain-chroma
+langchain-community
+
+# Vector database
+chromadb
+
+# Environment variables
+python-dotenv
+
+# PDF/document loading
+pypdf
+
+# Optional but useful for building UI later
+streamlit
+
+# HTTP/client dependencies
+httpx
+
+# Data handling
+numpy
+pandas
