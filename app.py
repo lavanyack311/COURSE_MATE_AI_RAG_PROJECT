@@ -1,4 +1,5 @@
 import os
+import uuid
 import tempfile
 import streamlit as st
 from dotenv import load_dotenv
@@ -166,9 +167,12 @@ if st.button("Create / Update Vector Database"):
             st.error("No valid text chunks found. Please use a readable PDF, URL, or text file.")
             st.stop()
 
+        collection_name = f"rag_collection_{uuid.uuid4().hex}"
+
         vector_store = Chroma.from_documents(
             documents=chunks,
-            embedding=embedding_model
+            embedding=embedding_model,
+            collection_name=collection_name
         )
 
         st.session_state["vector_store"] = vector_store
@@ -210,7 +214,6 @@ if query:
 
         st.session_state["answer"] = response.content
         st.session_state["retrieved_docs"] = docs
-
 
 if st.session_state.get("answer"):
     st.subheader("AI Answer")
