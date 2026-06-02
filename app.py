@@ -9,16 +9,45 @@ from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 
+
+# -----------------------------
+# API KEY SETUP
+# -----------------------------
 load_dotenv()
 
-PERSIST_DIR = "chroma-db"
+if "MISTRAL_API_KEY" in st.secrets:
+    os.environ["MISTRAL_API_KEY"] = st.secrets["MISTRAL_API_KEY"]
 
-st.set_page_config(page_title="RAG PDF Chatbot", page_icon="📄")
+if not os.getenv("MISTRAL_API_KEY"):
+    st.error("MISTRAL_API_KEY is missing. Add it in Streamlit Secrets.")
+    st.stop()
+
+
+# -----------------------------
+# STREAMLIT CONFIG
+# -----------------------------
+st.set_page_config(
+    page_title="RAG PDF Chatbot",
+    page_icon="📄",
+    layout="centered"
+)
+
 st.title("📄 RAG Application using Mistral + Chroma")
+st.write("Upload a PDF, create embeddings, and ask questions from the document.")
 
+
+# -----------------------------
+# MODELS
+# -----------------------------
 embedding_model = MistralAIEmbeddings()
 model = ChatMistralAI(model="mistral-small-2506")
 
+PERSIST_DIR = "chroma-db"
+
+
+# -----------------------------
+# PROMPT
+# -----------------------------
 prompt = ChatPromptTemplate.from_messages([
     ("system", """
 You are a helpful AI assistant.
@@ -27,19 +56,28 @@ If the answer is not found in the document, say:
 "I could not find the answer for the question asked".
 """),
     ("human", """
-context:
+Context:
 {context}
 
-question:
+Question:
 {question}
 """)
 ])
 
-uploaded_file = st.file_uploader("Upload a PDF document", type=["pdf"])
 
-if uploaded_file:
+# -----------------------------
+# PDF UPLOAD
+# -----------------------------
+uploaded_file = st.file_uploader(
+    "Upload a PDF document",
+    type=["pdf"]
+)
+
+if uploaded_file is not None:
+    st.success(f"Uploaded file: {uploaded_file.name}")
+
     if st.button("Create / Update Vector Database"):
-        with st.spinner("Processing PDF and creating embeddings..."):
+        with st.spinner("Processing PDF and creating vector database..."):
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
                 temp_file.write(uploaded_file.read())
                 temp_pdf_path = temp_file.name
@@ -51,9 +89,10 @@ if uploaded_file:
                 chunk_size=2000,
                 chunk_overlap=20
             )
+
             chunks = splitter.split_documents(docs)
 
-            Chroma.from_documents(
+            vector_store = Chroma.from_documents(
                 documents=chunks,
                 embedding=embedding_model,
                 persist_directory=PERSIST_DIR
@@ -61,15 +100,20 @@ if uploaded_file:
 
             os.remove(temp_pdf_path)
 
+        st.session_state["db_created"] = True
         st.success("Vector database created successfully!")
 
+
+# -----------------------------
+# QUESTION ANSWERING
+# -----------------------------
 st.divider()
 
 query = st.text_input("Ask a question from the uploaded PDF")
 
 if query:
-    if not os.path.exists(PERSIST_DIR):
-        st.warning("Please upload a PDF and create the vector database first.")
+    if not os.path.exists(PERSIST_DIR) and not st.session_state.get("db_created"):
+        st.warning("Please upload a PDF and click 'Create / Update Vector Database' first.")
     else:
         vector_store = Chroma(
             persist_directory=PERSIST_DIR,
@@ -85,7 +129,7 @@ if query:
             }
         )
 
-        with st.spinner("Searching document and generating answer..."):
+        with st.spinner("Retrieving relevant context and generating answer..."):
             docs = retriever.invoke(query)
 
             context = "\n\n".join([doc.page_content for doc in docs])
